@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 import numpy as np
 import pandas_ta as ta
 import requests
-from pymongo.errors import BulkWriteError
 import openai
 
 # 환경 변수 로드
@@ -17,6 +16,9 @@ load_dotenv()
 api_key = os.getenv('BINANCE_API_KEY')
 api_secret = os.getenv('BINANCE_SECRET_KEY')
 
+# OpenAI API 키
+openai_api_key = os.getenv('OPENAI_API_KEY')
+
 # MongoDB 연결
 mongo_uri = os.getenv('MONGO_URI', "mongodb://localhost:27017/")
 client_mongo = MongoClient(mongo_uri)
@@ -25,9 +27,6 @@ db = client_mongo['crypto_data'] # 데이터베이스 이름
 # 날짜별 통합 문서 컬렉션
 # 반드시 date 필드에 unique index를 생성할 것(db.daily_market.create_index('date', unique=True))
 daily_market_collection = db['daily_market']
-
-# OpenAI API 키
-openai_api_key = os.getenv('OPENAI_API_KEY')
 
 # --- 함수들 ---
 def interval_to_milliseconds(interval_str):
