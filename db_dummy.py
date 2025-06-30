@@ -1,4 +1,22 @@
 # -*- coding: utf-8 -*-
+"""
+LLM 기반 암호화폐 거래 에이전트 DB 초기 생성을 위한 Python 스크립트 (팀 보고용)
+
+역할: 월스트리트 주식/암호화폐 퀀트 투자 시니어 개발자
+목적: 기획서 및 DB 설계에 따라, 각 DB 컬렉션의 역할을 명확히 설명할 수 있도록
+      삽입 로직을 함수 단위로 구조화합니다. 또한, 모든 전문 부서의 데이터를
+      생성하여 전체 시스템의 데이터 구조를 한눈에 파악할 수 있도록 합니다.
+
+주요 특징:
+-   **구조적 명확성**: 각 컬렉션에 데이터를 삽입하는 로직을 `insert_*` 함수로 분리하여
+    코드의 가독성과 DB 구조에 대한 이해도를 높였습니다.
+-   **전체 부서 포함**: 기획서에 명시된 5개 부서의 데이터를 모두 생성하여,
+    부서별 파티셔닝이 어떻게 동작하는지 쉽게 확인할 수 있습니다.
+-   **멱등성 보장**: 스크립트를 여러 번 실행해도 데이터가 중복되지 않도록 `upsert=True`
+    옵션을 사용하여 중복 삽입을 방지합니다.
+-   **JSON 전용**: PyArrow 및 GridFS 의존성을 제거하고 모든 데이터를 MongoDB의
+    표준 JSON(BSON) 문서 형태로 직접 저장합니다.
+"""
 import datetime
 import pandas as pd
 from pymongo import MongoClient
@@ -13,7 +31,7 @@ for collection_name in db.list_collection_names():
 print("Previous database data cleared.")
 
 # --- 파라미터 변수 ---
-# 5개 부서
+# 기획서에 명시된 5개의 전문 부서
 DEPARTMENTS = [
     "Trend_Analyst",
     "Mean-Reversion_Specialist",
@@ -26,7 +44,7 @@ LOOP = 12
 EPISODE = 5
 
 def get_utc_timestamp():
-    """현재 UTC 타임스탬프를 ISO 형식으로 반환"""
+    """현재 UTC 타임스탬프를 ISO 형식으로 반환합니다."""
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 # --- 2. 더미 데이터 생성 함수 (스키마 기반) ---
@@ -75,7 +93,7 @@ def create_strategy_cases_checklist(dept):
         "position_side": "long",
         "preferred_action": "long"
     }
-    specific_case = {**cases[dept], **base_case} # "**"은 딕셔너리 언패킹
+    specific_case = {**cases[dept], **base_case} # 딕셔너리 언패킹 사용
 
     return {
         "version": f"{TODAY_STR}_1",
@@ -253,27 +271,51 @@ def create_feedback():
     }
 
 def create_strategy_update_agent_config():
-    """전략 업데이트 에이전트의 설정 데이터를 생성합니다."""
+    """전략 업데이트 에이전트의 설정 데이터를 생성합니다. (strategy_cases_checklist 스키마와 동일)"""
     return {
-        "last_updated": get_utc_timestamp(),
-        "update_frequency_days": 7,
-        "strategy_model_version": "v1.2.0",
-        "parameters": {
-            "learning_rate": 0.001,
-            "epochs": 100,
-            "dataset_size": "latest_30_days"
-        },
-        "status": "active"
+        "version": f"{TODAY_STR}_strategy_update_agent_1",
+        "updated_at": get_utc_timestamp(),
+        "cases": [
+            {
+                "id": "model_retrain_trigger",
+                "name": "모델 재학습 트리거 조건",
+                "condition": "SharpeRatio < 1.0 or PnL_Drop > 0.05",
+                "confidence": 0.95,
+                "predicted_scenario": "전략 성능 저하 감지",
+                "recommended_response": "전략 모델 재학습 및 배포",
+                "market": "n/a",
+                "position_side": "n/a",
+                "preferred_action": "retrain_strategy_model"
+            }
+        ],
+        "checklists": [
+            {
+                "id": "data_freshness_check",
+                "item": "최신 시장 데이터 확보 여부",
+                "metric": "data_age_hours",
+                "threshold": 24,
+                "critical": True
+            },
+            {
+                "id": "compute_resource_check",
+                "item": "재학습 컴퓨팅 자원 확인",
+                "metric": "cpu_utilization_pct",
+                "threshold": 80,
+                "critical": False
+            }
+        ]
     }
 
 def create_memory_guideline_update_agent_config():
-    """기억 지침 업데이트 에이전트의 설정 데이터를 생성합니다."""
+    """기억 지침 업데이트 에이전트의 설정 데이터를 생성합니다. (memory_guideline 스키마와 동일)"""
     return {
-        "last_updated": get_utc_timestamp(),
-        "review_interval_days": 30,
-        "guideline_version": "v1.0.1",
-        "metrics_for_review": ["win_rate", "sharpe_ratio"],
-        "status": "active"
+        "version": f"{TODAY_STR}_memory_guideline_update_agent_1",
+        "updated_at": get_utc_timestamp(),
+        "short_memory_rule": "최근 7일간의 피드백 분석 결과를 바탕으로 단기 기억 지침을 조정한다.",
+        "mid_memory_rule": "지난 30일간의 에피소드 요약에서 반복되는 문제점을 식별하여 중기 기억 지침을 개선한다.",
+        "long_memory_rule": "분기별 전체 성능 지표를 검토하여 장기 기억 지침의 방향성을 설정한다.",
+        "length_limit_tokens": 500, # 업데이트 에이전트의 규칙은 더 많은 토큰을 필요로 할 수 있음
+        "style_guide": "기억 지침 업데이트 시, 명확하고 간결하며 측정 가능한 기준을 제시한다."
     }
 
 
@@ -415,7 +457,7 @@ def seed_database_for_presentation():
 
         # 3. 체결 데이터 (JSON) 생성 및 스냅샷 컬렉션에 삽입
         executions_list = create_executions_data()
-        insert_executions_into_snapshots(db, snapshot_meta, executions_list) # 함수명 변경 및 스냅샷 컬렉션에 삽입
+        insert_executions_into_snapshots(db, snapshot_meta, executions_list)
         print(f"   - Inserted executions_data into 'snapshots' collection (type: 'executions').")
 
         # 4. 에피소드 요약 및 에이전트 설정 데이터 생성 및 삽입
@@ -427,15 +469,17 @@ def seed_database_for_presentation():
         episode_docs = {
             'metrics': create_metrics(),
             'feedback': create_feedback(),
-            'strategy_update_agent_config': create_strategy_update_agent_config(), # 새로운 에이전트 설정 추가
-            'memory_guideline_update_agent_config': create_memory_guideline_update_agent_config(), # 새로운 에이전트 설정 추가
+            # strategy_update_agent_config와 memory_guideline_update_agent_config는 이제
+            # create_strategy_cases_checklist 및 create_memory_guideline과 동일한 스키마를 가집니다.
+            'strategy_update_agent_config': create_strategy_update_agent_config(),
+            'memory_guideline_update_agent_config': create_memory_guideline_update_agent_config(),
         }
         insert_episode_summary(db, dept, episode_meta, episode_docs)
         print(f"   - Inserted episode_summary (Metrics & Feedback) and Agent configs.")
 
         # 5. 에피소드 통합 거래 데이터 (JSON) 생성 및 에피소드 컬렉션에 삽입
         episode_trades_list = create_episode_trades_data()
-        insert_episode_trades_into_episodes(db, episode_meta, episode_trades_list) # 함수명 변경 및 에피소드 컬렉션에 삽입
+        insert_episode_trades_into_episodes(db, episode_meta, episode_trades_list)
         print(f"   - Inserted episode_trades_data into 'episodes' collection (type: 'trades_data').")
 
     print("\n" + "="*50)
